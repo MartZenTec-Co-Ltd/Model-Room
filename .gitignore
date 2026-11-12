@@ -1,0 +1,28 @@
+# Generated Python and Windows build files
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+release/
+*.exe
+*.zip
+*.log
+*.result.json
+selftest*.json
+
+# Local conversations, private images and credentials must stay outside Git.
+.env
+.env.*
+!.env.example
+*.sqlite3
+*.sqlite3-*
+*.db
+*.key
+*.pem
+avatars/
+appearance/
+runtime/
+.DS_Store
+Thumbs.db

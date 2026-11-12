@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "purpose": "Public reference, not a config import. Settings > Connections > Local agents detects actual programs.",
+  "agents": [
+    {
+      "name": "Codex",
+      "kind": "codex",
+      "program": "codex.exe",
+      "auth": "Codex login or its configured API authentication"
+    },
+    {
+      "name": "Claude Code",
+      "kind": "claude",
+      "transport": "claude-cli",
+      "model": "sonnet",
+      "auth": "CLI login/configuration"
+    },
+    {
+      "name": "DeepSeek Harness",
+      "kind": "dsh",
+      "transport": "dsh-cli",
+      "model": "configured",
+      "auth": "DEEPSEEK_API_KEY or configured headless credentials",
+      "requires": [
+        "--permission-mode read-only",
+        "--approval-policy never"
+      ]
+    }
+  ]
+}

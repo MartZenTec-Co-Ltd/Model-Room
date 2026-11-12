@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Model Room · 局域网参会</title>
+  <style>
+    :root{color-scheme:light;font:16px system-ui,sans-serif;--ink:#202c45;--muted:#67758c;--line:#e4e9f2;--blue:#5262d5;--page:#f4f6fb}
+    *{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--ink);min-height:100dvh}
+    [hidden]{display:none!important}button,input,textarea{font:inherit}
+    button{padding:.7rem 1.1rem;border:0;border-radius:11px;background:var(--blue);color:white;font-weight:600;cursor:pointer;transition:background .15s,box-shadow .15s}
+    button:hover{background:#4352c2;box-shadow:0 3px 10px #5262d522}button:active{box-shadow:none}
+    button:disabled{opacity:.55}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+    input,textarea{width:100%;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);padding:.7rem}
+    header{background:#fff;border-bottom:1px solid var(--line);padding:1rem max(1rem,calc((100% - 1050px)/2))}
+    .brand{font-size:.72rem;font-weight:800;letter-spacing:.15em;color:var(--blue)}
+    h1{margin:.25rem 0;font-size:1.4rem}.hint{color:var(--muted);font-size:.88rem;margin:.35rem 0}
+    #join{width:min(92%,420px);margin:12vh auto 2rem;background:#fff;border:1px solid var(--line);border-radius:20px;padding:1.8rem;box-shadow:0 12px 45px #202c4508}
+    #join input{margin:.45rem 0 .75rem}#chat{height:calc(100dvh - 100px);min-height:330px;max-width:1050px;margin:auto;display:grid;grid-template-columns:minmax(0,1fr) 215px}
+    .conversation{min-height:0;min-width:0;display:flex;flex-direction:column}
+    #feed{min-height:0;flex:1;overflow-y:auto;padding:1rem}
+    .entry{margin:.6rem 0 1rem;max-width:91%}.entry.own{margin-left:auto;width:fit-content;text-align:right}
+    .meta{font-size:.76rem;color:var(--muted);padding:0 .3rem .25rem}
+    .profile-avatar{width:30px;height:30px;border-radius:50%;vertical-align:middle;margin-right:.5rem;object-fit:cover}
+    .bubble{white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;border-radius:4px 15px 15px 15px;background:#fff;border:1px solid var(--line);padding:.8rem 1rem;line-height:1.65;box-shadow:0 2px 5px #202c4503}
+    .own .bubble{background:#edf0ff;border-color:#dfe5ff;border-radius:15px 4px 15px 15px}
+    .entry.round .bubble{background:#eef0f8;color:var(--muted);font-size:.86rem}
+    #composer{display:flex;gap:.65rem;align-items:flex-end;background:#fff;border-top:1px solid var(--line);padding:.7rem .8rem}
+    #composer button{flex:none;display:flex;align-items:center;gap:.4rem}#composer button svg{width:18px;height:18px}textarea{min-height:3.1rem;max-height:8rem;resize:vertical}
+    aside{border-left:1px solid var(--line);background:#fff;padding:1rem;overflow:auto}aside h2{font-size:.96rem;margin:0 0 .65rem}
+    ul{padding:0;list-style:none;margin:0}li{margin:.65rem 0;font-size:.85rem;overflow-wrap:anywhere}
+    .badge{font-size:.68rem;color:var(--blue);background:#e9edff;border-radius:4px;padding:.14rem .3rem;margin-right:.35rem}
+    #notice{padding:0 .8rem;margin:.2rem 0 .5rem;color:var(--muted);min-height:1.2rem}
+    @media(max-width:640px){#chat{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}aside{border-left:0;border-top:1px solid var(--line);padding:.5rem .8rem;max-height:115px}aside h2{margin:0}ul{display:flex;flex-wrap:wrap;gap:.2rem .65rem}li{margin:.2rem 0}}
+  </style>
+</head>
+<body>
+  <header><select id="language" aria-label="Language" style="float:right;font:inherit;padding:.3rem;max-width:42%"><option value="zh-Hans">简体中文</option><option value="zh-Hant">繁體中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option></select><div class="brand">MODEL ROOM / LAN</div><h1 id="roomName">局域网会议</h1><p id="roomStatus" class="hint">用昵称加入这间群聊</p></header>
+  <form id="join">
+    <label id="nicknameLabel" for="nickname">你的昵称</label><input id="nickname" required maxlength="24" autocomplete="nickname" placeholder="例如 小林">
+    <button id="joinButton" type="submit">加入群聊</button><p id="joinError" class="hint" role="status"></p>
+  </form>
+  <main id="chat" hidden>
+    <section class="conversation" aria-label="群聊消息">
+      <div id="feed" role="log"></div>
+      <form id="composer"><textarea id="draft" rows="2" maxlength="4000" required aria-label="发送消息" placeholder="说点什么…"></textarea><button id="send" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3 22 12 3 21 7 12 3 3M7 12H22"/></svg>发送</button></form>
+      <p id="notice" class="hint" role="status"></p>
+    </section>
+    <aside><h2 id="memberTitle">群成员</h2><ul id="members"></ul></aside>
+  </main>
+  <script>
+    "use strict";
+    const $ = id => document.getElementById(id);
+    const base = location.pathname.replace(/\/$/, "");
+    const storageKey = "model-room-session:" + base;
+    let session = "", rendered = 0, polling = false, lastState = null;
+    const words = {
+      "zh-Hans":["局域网会议","用昵称加入这间群聊","你的昵称","例如 小林","加入群聊","说点什么…","发送","群成员","本机用户","人类","访客","连接中断，正在重试。","请求失败","已连接","第 {n} 轮","系统","讨论","联网搜索"],
+      "zh-Hant":["區域網路會議","輸入暱稱加入群聊","你的暱稱","例如 小林","加入群聊","說點什麼…","傳送","群組成員","本機使用者","真人","訪客","連線中斷，正在重試。","請求失敗","已連線","第 {n} 輪","系統","討論","聯網搜尋"],
+      "en":["LAN meeting","Join this group with a nickname","Your nickname","e.g. Alex","Join group","Say something…","Send","Members","Host","Person","Guest","Disconnected. Retrying…","Request failed","Connected","Round {n}","System","Discussion","Web search"],
+      "ja":["LAN ミーティング","ニックネームで参加","ニックネーム","例：小林","参加する","メッセージを入力…","送信","メンバー","ホスト","参加者","ゲスト","切断されました。再接続中…","リクエスト失敗","接続済み","ラウンド {n}","システム","討論","ウェブ検索"],
+      "ko":["LAN 회의","닉네임으로 채팅방에 참여하세요","닉네임","예: 민수","참여하기","메시지를 입력하세요…","보내기","참여자","호스트","사람","게스트","연결이 끊겨 다시 시도합니다.","요청 실패","연결됨","{n}회차","시스템","토론","웹 검색"]
+    };
+    const browserLanguage = navigator.language.toLowerCase();
+    let language = browserLanguage.startsWith("zh") ? (/tw|hk|hant/.test(browserLanguage) ? "zh-Hant" : "zh-Hans") : browserLanguage.startsWith("ja") ? "ja" : browserLanguage.startsWith("ko") ? "ko" : "en";
+    try { if (words[localStorage.getItem("modelroomLanguage")]) language = localStorage.getItem("modelroomLanguage"); } catch {}
+    const w = i => words[language][i];
+    function applyLanguage() {
+      document.documentElement.lang=language; $("language").value=language;
+      $("nicknameLabel").textContent=w(2); $("nickname").placeholder=w(3); $("joinButton").textContent=w(4);
+      $("draft").placeholder=w(5); $("draft").setAttribute("aria-label",w(6));
+      $("send").lastChild.textContent=w(6); $("memberTitle").textContent=w(7);
+      if (lastState) { $("feed").replaceChildren(); rendered=0; render(lastState); }
+      else { $("roomName").textContent=w(0); $("roomStatus").textContent=w(1); }
+    }
+    $("language").addEventListener("change",()=>{language=$("language").value; try{localStorage.setItem("modelroomLanguage",language);}catch{} applyLanguage();});
+    try { session = sessionStorage.getItem(storageKey) || ""; } catch {}
+
+    async function request(action, data) {
+      const headers = {Accept:"application/json"};
+      if (session) headers.Authorization = "Bearer " + session;
+      const options = {headers, cache:"no-store"};
+      if (data) { headers["Content-Type"] = "application/json"; options.method = "POST"; options.body = JSON.stringify(data); }
+      const response = await fetch(base + "/" + action, options);
+      const body = await response.json();
+      if (!response.ok) { const error = new Error(body.error || w(12)); error.status = response.status; throw error; }
+      return body;
+    }
+
+    function render(state) {
+      if (!state.name) return;
+      lastState=state;
+      $("join").hidden = true; $("chat").hidden = false;
+      $("roomName").textContent = state.name; document.title = state.name + " · Model Room";
+      $("roomStatus").textContent = (!state.status || state.status==="就绪" || state.status==="已连接") ? w(13) : state.status;
+      const feed = $("feed");
+      const nearEnd = feed.scrollHeight - feed.clientHeight - feed.scrollTop < 90;
+      for (const message of state.messages || []) {
+        if (message.id <= rendered) continue;
+        rendered = message.id;
+        const line = document.createElement("article"), meta = document.createElement("div"), bubble = document.createElement("div");
+        line.className = "entry";
+        if (!message.is_host && message.author === "访客 · " + state.you) line.classList.add("own");
+        if (!message.is_host && message.author === "讨论") line.classList.add("round");
+        meta.className = "meta";
+        const author = message.is_host ? message.author : message.author==="系统" ? w(15) : message.author==="讨论" ? w(16) : message.author==="联网搜索" ? w(17) : message.author.startsWith("访客 · ") ? w(10)+message.author.slice(2) : message.author;
+        meta.textContent = author + (message.round ? " · " + w(14).replace("{n}",message.round) : "") + "   " + message.time.slice(11, 16);
+        if (message.is_host && typeof message.avatar==="string" && message.avatar.length<20000 && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(message.avatar)) {
+          const photo=document.createElement("img"); photo.className="profile-avatar"; photo.alt=""; photo.src=message.avatar; meta.prepend(photo);
+        }
+        bubble.className = "bubble"; bubble.textContent = message.body;
+        line.append(meta, bubble); feed.append(line);
+      }
+      if (nearEnd) feed.scrollTop = feed.scrollHeight;
+      const people = [{name:state.host_name || w(8), type:w(9)}, ...(state.guests || []).map(name => ({name, type:w(10)})),
+        ...(state.members || []).map(name => ({name, type:"AI"}))];
+      $("memberTitle").textContent = w(7)+" · " + people.length;
+      $("members").replaceChildren(...people.map(person => {
+        const item = document.createElement("li"), badge = document.createElement("span");
+        badge.className = "badge"; badge.textContent = person.type;
+        item.append(badge, document.createTextNode(person.name)); return item;
+      }));
+    }
+
+    async function poll() {
+      if (!session || polling) return;
+      polling = true;
+      try { render(await request("state")); $("notice").textContent = ""; }
+      catch (error) {
+        if (error.status === 401 || error.status === 404) {
+          session = ""; try { sessionStorage.removeItem(storageKey); } catch {}
+          $("chat").hidden = true; $("join").hidden = false; $("joinError").textContent = error.message;
+        } else { $("notice").textContent = w(11); }
+      } finally { polling = false; }
+    }
+
+    $("join").addEventListener("submit", async event => {
+      event.preventDefault(); $("joinButton").disabled = true;
+      try {
+        const result = await request("join", {name:$("nickname").value});
+        session = result.session;
+        try { sessionStorage.setItem(storageKey, session); } catch {}
+        $("joinError").textContent = ""; await poll();
+      } catch (error) { $("joinError").textContent = error.message; }
+      finally { $("joinButton").disabled = false; }
+    });
+
+    $("composer").addEventListener("submit", async event => {
+      event.preventDefault(); $("send").disabled = true;
+      const text = $("draft").value;
+      try {
+        await request("messages", {text});
+        if ($("draft").value === text) $("draft").value = "";
+        await poll();
+      } catch (error) { $("notice").textContent = error.message; }
+      finally { $("send").disabled = false; $("draft").focus(); }
+    });
+    $("draft").addEventListener("keydown", event => {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); $("composer").requestSubmit(); }
+    });
+    applyLanguage();
+    setInterval(poll, 1100);
+    poll();
+  </script>
+</body>
+</html>
