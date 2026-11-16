@@ -134,7 +134,7 @@ jobs:
           mkdir appcheck
           ditto -x -k "release/ModelRoom-v1.1-macOS-${{ matrix.arch }}.zip" appcheck
           codesign --verify --deep --strict appcheck/ModelRoom.app
-          env MODELROOM_REQUIRE_BUNDLED=1 PATH=/usr/bin:/bin PYTHONHOME=/missing-python PYTHONPATH=/missing-modules appcheck/ModelRoom.app/Contents/MacOS/ModelRoom --self-test "$PWD/selftest-macos.json"
+          env MODELROOM_REQUIRE_BUNDLED=1 PATH=/usr/bin:/bin PYTHONHOME=/missing-python PYTHONPATH=/missing-modules appcheck/ModelRoom.app/Contents/MacOS/ModelRoom --self-test "$PWD/selftest-macos.json" || { cat selftest-macos.json; exit 1; }
           python -c "import json; assert json.load(open('selftest-macos.json'))['ok']"
           hdiutil verify "release/ModelRoom-v1.1-macOS-${{ matrix.arch }}.dmg"
       - uses: actions/upload-artifact@v4

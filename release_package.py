@@ -20,7 +20,7 @@ def public_files(source):
         for path in sorted((source/name).rglob("*")):
             if not path.is_file() or "__pycache__" in path.parts:
                 continue
-            if name == "licenses" or (name == "tests" and path.suffix in {".py", ".mjs"}) or (name in {"examples","packaging"} and path.suffix in {".json", ".md"}) or (name == ".github" and path.suffix in {".yml", ".yaml", ".md"}):
+            if name == "licenses" or (name == "tests" and path.suffix in {".py", ".mjs"}) or (name in {"examples","packaging"} and path.suffix in {".json", ".md", ".conf"}) or (name == ".github" and path.suffix in {".yml", ".yaml", ".md"}):
                 yield path
 
 

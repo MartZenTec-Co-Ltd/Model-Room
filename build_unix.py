@@ -52,7 +52,7 @@ def build(target):
                    '--copy-metadata','Pillow','--copy-metadata','cryptography']
         resources = ['translations.json','lan_room.html','licenses','LICENSE','THIRD_PARTY_NOTICES.md',
                      *[p.name for p in ROOT.glob('README*.md')],
-                     *[p.name for p in ROOT.glob('PERSONALITIES*.md')], 'examples']
+                     *[p.name for p in ROOT.glob('PERSONALITIES*.md')], 'examples', 'packaging']
         for name in resources:
             destination = name if (ROOT/name).is_dir() else '.'
             command += ['--add-data',str(ROOT/name)+os.pathsep+destination]
