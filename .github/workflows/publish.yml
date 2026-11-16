@@ -140,14 +140,17 @@ jobs:
           def gh(*args):
               return subprocess.check_output(['gh',*args],text=True)
           def api(path):
-              return json.loads(gh('api',path))
+              return json.loads(gh('api',path,'--header','Cache-Control: no-cache'))
           sha=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
           releases=api(f'repos/{repo}/releases?per_page=100')
           release=next((item for item in releases if item['tag_name']=='v1.1'),None)
           if release is None:
-              gh('release','create','v1.1','--repo',repo,'--draft','--target',sha,
-                 '--title','Model Room v1.1 — Windows, Linux & macOS','--notes-file','release-notes-v11.md')
-              release=next(item for item in api(f'repos/{repo}/releases?per_page=100') if item['tag_name']=='v1.1')
+              payload={'tag_name':'v1.1','target_commitish':sha,'draft':True,
+                       'name':'Model Room v1.1 — Windows, Linux & macOS',
+                       'body':Path('release-notes-v11.md').read_text()}
+              created=subprocess.run(['gh','api',f'repos/{repo}/releases','--method','POST','--input','-'],
+                                     input=json.dumps(payload),text=True,capture_output=True,check=True)
+              release=json.loads(created.stdout)
           assert release['draft'],'Do not replace an already public release.'
           paths={path.name:path for path in Path('release-v11').iterdir() if path.is_file()}
           assert len(paths)==15
