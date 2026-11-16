@@ -20,7 +20,7 @@ def run():
     # No application data, user transcripts, API keys or network calls are needed.
     for name in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "BRAVE_SEARCH_API_KEY"):
         os.environ.pop(name, None)
-    runtime = Path(getattr(sys,'_MEIPASS',Path(sys.executable).resolve().parent))
+    runtime = Path(getattr(sys,'_MEIPASS',Path(sys.executable).resolve().parent)).resolve()
     import model_room
     if (getattr(sys,'frozen',False) or os.environ.get('MODELROOM_REQUIRE_BUNDLED')) and not Path(model_room.__file__).resolve().is_relative_to(runtime):
         raise RuntimeError("Application module was not loaded from the bundled runtime.")
@@ -85,6 +85,8 @@ def main():
         result, code = {"ok":False, "error":traceback.format_exc()}, 1
     report.parent.mkdir(parents=True, exist_ok=True)
     report.write_text(json.dumps(result, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
+    if code and sys.stderr is not None:
+        sys.stderr.write(result['error'])
     return code
 
 

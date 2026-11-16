@@ -46,6 +46,10 @@ def package(source, executable, output):
         archive.write(target, filename)
         for path in source.glob("README*.md"):
             archive.write(path, path.name)
+        for path in source.glob('PERSONALITIES*.md'):
+            archive.write(path,path.name)
+        for path in (source/'examples/personalities').glob('*.md'):
+            archive.write(path,'examples/personalities/'+path.name)
         for name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "RELEASE_NOTES.md"):
             archive.write(source/name, name)
         for path in (source/"licenses").rglob("*"):

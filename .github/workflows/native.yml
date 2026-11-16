@@ -65,7 +65,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb xauth tk8.6 libxss1 libxft2 squashfs-tools desktop-file-utils
-          python -m pip install -r requirements-build.txt
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python -m pip install --only-binary=:all: -r requirements-build.txt
       - name: Offline regression checks
         run: |
           python tests/check_v11.py
@@ -78,7 +80,7 @@ jobs:
       - name: Test actual AppImage without Python
         run: |
           chmod +x release/*.AppImage
-          xvfb-run -a env APPIMAGE_EXTRACT_AND_RUN=1 MODELROOM_REQUIRE_BUNDLED=1 PATH=/usr/bin:/bin PYTHONHOME=/missing-python PYTHONPATH=/missing-modules ./release/ModelRoom-v1.1-Linux-x86_64.AppImage --self-test "$PWD/selftest-appimage.json"
+          xvfb-run -a env APPIMAGE_EXTRACT_AND_RUN=1 MODELROOM_REQUIRE_BUNDLED=1 PATH=/usr/bin:/bin PYTHONHOME=/missing-python PYTHONPATH=/missing-modules ./release/ModelRoom-v1.1-Linux-x86_64.AppImage --self-test "$PWD/selftest-appimage.json" || { cat selftest-appimage.json; exit 1; }
           python -c "import json; assert json.load(open('selftest-appimage.json'))['ok']"
       - name: Install and test actual DEB
         run: |
@@ -119,7 +121,11 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
-      - run: python -m pip install -r requirements-build.txt
+      - name: Install isolated binary build dependencies
+        run: |
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python -m pip install --only-binary=:all: -r requirements-build.txt
       - name: Offline regression checks
         run: |
           python tests/check_v11.py
