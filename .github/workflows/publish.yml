@@ -1,0 +1,173 @@
+name: Publish verified native release
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful Native standalone builds run ID
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: modelroom-release-publisher
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+    steps:
+      - name: Verify the exact build run and four successful jobs
+        id: build
+        run: |
+          python - <<'PY'
+          import json,os,re,subprocess
+          def api(path):
+              return json.loads(subprocess.check_output(['gh','api',path],text=True))
+          run_id=os.environ['BUILD_RUN_ID']
+          assert re.fullmatch(r'[0-9]+',run_id)
+          repo=os.environ['GITHUB_REPOSITORY']
+          run=api(f'repos/{repo}/actions/runs/{run_id}')
+          assert run['conclusion']=='success' and run['name']=='Native standalone builds'
+          assert run['head_repository']['full_name']==repo and run['head_branch']=='release/v1.1'
+          jobs=api(f'repos/{repo}/actions/runs/{run_id}/jobs')['jobs']
+          assert len(jobs)==4 and all(job['conclusion']=='success' for job in jobs)
+          assert re.fullmatch(r'[0-9a-f]{40}',run['head_sha'])
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('sha='+run['head_sha']+'\n')
+          PY
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.build.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: native-artifacts
+      - name: Verify source provenance and prepare the release
+        run: |
+          python - <<'PY'
+          import hashlib,json,os,re,shutil,subprocess
+          from pathlib import Path
+          from zipfile import ZipFile
+          from release_package import public_files
+          from room_version import VERSION
+          assert VERSION=='1.1'
+          repo=os.environ['GITHUB_REPOSITORY']
+          run_id=os.environ['BUILD_RUN_ID']
+          def api(path):
+              return json.loads(subprocess.check_output(['gh','api',path],text=True))
+          run=api(f'repos/{repo}/actions/runs/{run_id}')
+          jobs=api(f'repos/{repo}/actions/runs/{run_id}/jobs')['jobs']
+          names={
+              'ModelRoom-v1.1-Windows-x64.exe','ModelRoom-v1.1-Windows-x64.zip',
+              'ModelRoom-v1.1-Source.zip','ModelRoom-v1.1-BuildInfo.json',
+              'ModelRoom-v1.1-Linux-x86_64.AppImage','model-room_1.1_amd64.deb',
+              'ModelRoom-v1.1-linux-x86_64-BuildInfo.json',
+              *{f'ModelRoom-v1.1-macOS-{arch}.{ext}' for arch in ('arm64','x86_64') for ext in ('zip','dmg')},
+              *{f'ModelRoom-v1.1-macos-{arch}-BuildInfo.json' for arch in ('arm64','x86_64')},
+          }
+          found={}
+          for path in Path('native-artifacts').rglob('*'):
+              if path.is_file() and path.name in names:
+                  assert path.name not in found
+                  found[path.name]=path
+          assert set(found)==names,sorted(names-set(found))
+          output=Path('release-v11'); output.mkdir()
+          for name,path in found.items():
+              shutil.copy2(path,output/name)
+          with ZipFile(output/'ModelRoom-v1.1-Source.zip') as archive:
+              archived={name.removeprefix('ModelRoom-v1.1/'):archive.read(name) for name in archive.namelist()}
+          source={path.relative_to(Path.cwd()).as_posix():path.read_bytes() for path in public_files(Path.cwd())}
+          def canonical(name,data):
+              return data if name.endswith('.ico') else data.replace(b'\r\n',b'\n')
+          assert {name:canonical(name,data) for name,data in source.items()}=={name:canonical(name,data) for name,data in archived.items()}
+          for name in names:
+              if name.endswith('.json'):
+                  info=json.loads((output/name).read_text())
+                  assert info['version']=='1.1' and info['requires_python_install'] is False
+          validation={
+              'version':'1.1','source_commit':run['head_sha'],'workflow_url':run['html_url'],
+              'jobs':[{'name':job['name'],'conclusion':job['conclusion']} for job in jobs],
+              'source_files':len(source),'source_zip_matches_audited_source':True,
+              'source_comparison':'same paths and content, allowing declared CRLF/LF normalization',
+              'three_member_tests':'offline adapters: peer context, independent personalities, human interruption, failure isolation',
+              'linux':'Ubuntu 22.04 and Kali Rolling container; AppImage extract-and-run and installed DEB diagnostics',
+              'macos':'native arm64 and Intel app diagnostics, ad-hoc signature and DMG integrity; not Apple notarized',
+              'privacy':'public source allowlist; clean native CI without user credentials or conversations',
+          }
+          proof=output/'ModelRoom-v1.1-Validation.json'
+          proof.write_text(json.dumps(validation,indent=2)+'\n')
+          names.add(proof.name)
+          sums=output/'SHA256SUMS-v1.1.txt'
+          sums.write_text(''.join(hashlib.sha256((output/name).read_bytes()).hexdigest()+'  '+name+'\n' for name in sorted(names)))
+          notes=Path('release-notes-v11.md')
+          notes.write_text(Path('RELEASE_NOTES.md').read_text()+f'''
+
+          ## Downloads
+
+          - Windows: `ModelRoom-v1.1-Windows-x64.exe` (no Python installation).
+          - Linux portable: `ModelRoom-v1.1-Linux-x86_64.AppImage`.
+          - Kali / compatible Debian-family: `model-room_1.1_amd64.deb`.
+          - Apple Silicon: `ModelRoom-v1.1-macOS-arm64.dmg` or `.zip`.
+          - Intel Mac: `ModelRoom-v1.1-macOS-x86_64.dmg` or `.zip`.
+          - Source and five-language guides: `ModelRoom-v1.1-Source.zip`.
+
+          Settings → AI personalities: edit each member, use templates, import/export Markdown, then Apply or OK. Each room and seat is independent. Ordinary replies and every discussion round use the preferences. Markdown is text only, grants no additional permissions, and is sent to that member's service.
+
+          设置 → AI 性格：每个群、每个 AI 席位独立设置；支持模板、编辑及 Markdown 导入/导出。套用或确定保存。建议先用两到三个 AI，至少两轮自由讨论，再用“我来发言”补充条件。
+
+          AppImage: `chmod +x ModelRoom-v1.1-Linux-x86_64.AppImage`. If FUSE is unavailable, launch with `--appimage-extract-and-run`.
+          DEB: `sudo apt install ./model-room_1.1_amd64.deb`.
+          macOS: open the DMG and drag the app to Applications. **Ad-hoc signed, not Apple Developer ID signed or notarized.** Gatekeeper may block first launch; see [Apple guidance](https://support.apple.com/en-us/102445). System security is not disabled.
+
+          All four native jobs passed: {run['html_url']}. Packaged Linux diagnostics also passed in Kali Rolling. AppImage was tested in extract-and-run mode. No separate Python installation is required. Provider accounts, API allowance and optional local agents are separate.
+
+          The source package matches the audited public files, allowing Git-declared line endings. See `ModelRoom-v1.1-Validation.json` and `SHA256SUMS-v1.1.txt`.
+
+          [简体中文](https://github.com/{repo}/blob/main/README.zh-Hans.md) · [繁體中文](https://github.com/{repo}/blob/main/README.zh-Hant.md) · [English](https://github.com/{repo}/blob/main/README.md) · [日本語](https://github.com/{repo}/blob/main/README.ja.md) · [한국어](https://github.com/{repo}/blob/main/README.ko.md)
+          ''')
+          PY
+      - name: Draft, upload, verify every server digest and publish
+        run: |
+          python - <<'PY'
+          import hashlib,json,os,subprocess
+          from pathlib import Path
+          repo=os.environ['GITHUB_REPOSITORY']
+          def gh(*args):
+              return subprocess.check_output(['gh',*args],text=True)
+          def api(path):
+              return json.loads(gh('api',path))
+          sha=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          releases=api(f'repos/{repo}/releases?per_page=100')
+          release=next((item for item in releases if item['tag_name']=='v1.1'),None)
+          if release is None:
+              gh('release','create','v1.1','--repo',repo,'--draft','--target',sha,
+                 '--title','Model Room v1.1 — Windows, Linux & macOS','--notes-file','release-notes-v11.md')
+              release=next(item for item in api(f'repos/{repo}/releases?per_page=100') if item['tag_name']=='v1.1')
+          assert release['draft'],'Do not replace an already public release.'
+          paths={path.name:path for path in Path('release-v11').iterdir() if path.is_file()}
+          assert len(paths)==15
+          existing={asset['name']:asset for asset in release['assets']}
+          assert set(existing).issubset(paths)
+          for name,path in sorted(paths.items()):
+              digest='sha256:'+hashlib.sha256(path.read_bytes()).hexdigest()
+              if name in existing:
+                  assert existing[name]['digest']==digest and existing[name]['size']==path.stat().st_size
+              else:
+                  gh('release','upload','v1.1',str(path),'--repo',repo)
+          release=api(f'repos/{repo}/releases/{release["id"]}')
+          assets={asset['name']:asset for asset in release['assets']}
+          assert set(assets)==set(paths)
+          for name,path in paths.items():
+              assert assets[name]['digest']=='sha256:'+hashlib.sha256(path.read_bytes()).hexdigest()
+              assert assets[name]['size']==path.stat().st_size and assets[name]['state']=='uploaded'
+          gh('release','edit','v1.1','--repo',repo,'--draft=false','--latest')
+          release=api(f'repos/{repo}/releases/latest')
+          assert release['tag_name']=='v1.1' and not release['draft']
+          assert api(f'repos/{repo}/commits/v1.1')['sha']==sha
+          print('Published '+release['html_url'])
+          PY
