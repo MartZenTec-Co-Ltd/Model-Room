@@ -68,6 +68,7 @@ class PersonalityPanel:
         if index < 0:
             return
         self.current = self.members[index].id
+        self.template.set('选择性格模板')
         self.editor.delete('1.0','end')
         self.editor.insert('1.0',self.drafts[self.current])
         self.editor.edit_modified(False)
@@ -140,4 +141,8 @@ class PersonalityPanel:
         self.room.members = updated
         self.original = dict(values)
         self.drafts = dict(values)
+        if self.current is not None:
+            self.editor.delete('1.0','end')
+            self.editor.insert('1.0',values[self.current])
+            self.editor.edit_modified(False)
         self.room.refresh_connections()

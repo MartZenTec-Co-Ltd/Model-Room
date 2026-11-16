@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory() as directory:
         settings=app.settings_window
         editor=settings.personality
         root.update()
-        editor.editor.insert('1.0','# First\nBe specific.')
+        editor.editor.insert('1.0','# First\nBe specific.\n')
         editor.choice.current(1); editor.select()
         editor.template.set('审阅伙伴'); editor.use_template()
         editor.choice.current(2); editor.select()
