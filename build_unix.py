@@ -48,7 +48,8 @@ def build(target):
         command = [sys.executable,'-m','PyInstaller','--noconfirm','--clean','--onedir',
                    '--name','ModelRoom','--distpath',str(temp/'dist'),'--workpath',str(temp/'work'),
                    '--specpath',str(temp),'--paths',str(ROOT),'--hidden-import','room_selftest',
-                   '--collect-all','certifi','--collect-all','cryptography',
+                   '--collect-all','certifi','--collect-all','cryptography','--collect-all','PIL',
+                   '--hidden-import','PIL._imagingtk',
                    '--copy-metadata','Pillow','--copy-metadata','cryptography']
         resources = ['translations.json','lan_room.html','licenses','LICENSE','THIRD_PARTY_NOTICES.md',
                      *[p.name for p in ROOT.glob('README*.md')],

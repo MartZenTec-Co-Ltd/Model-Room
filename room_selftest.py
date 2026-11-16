@@ -37,16 +37,18 @@ def run():
         root = tk.Tk()
         root.attributes("-alpha", 0)
         errors = []
-        root.report_callback_exception = lambda *args: errors.append(args)
+        root.report_callback_exception = lambda *args: errors.append(''.join(traceback.format_exception(*args)))
         app = None
         try:
             app = RoomWindow(root, store)
             app.append_message(app.current_room.id, "你", "Offline release diagnostic")
-            finish = time.monotonic()+.4
+            finish = time.monotonic()+2
             while time.monotonic()<finish:
                 root.update()
                 time.sleep(.02)
-            assert app.wallpaper_image is not None
+            if errors:
+                raise RuntimeError('\n'.join(errors))
+            assert app.wallpaper_image is not None, 'Wallpaper did not render in the bundled GUI.'
             assert app.wallpaper_image.height()==app.timeline.view.winfo_height()
             assert any(photo is not None for photo in app.timeline.avatars.values())
             app.open_settings()
