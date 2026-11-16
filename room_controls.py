@@ -1,5 +1,6 @@
 """Reusable settings controls. Chat controls retain their existing behavior."""
 import tkinter as tk
+import sys
 from tkinter import ttk
 
 import room_style as palette
@@ -85,15 +86,21 @@ class SettingsScroll(ttk.Frame):
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(slot, width=e.width))
         self.top = self.winfo_toplevel()
         self.wheel_binding = self.top.bind("<MouseWheel>", self._wheel, add="+")
+        self.linux_bindings = [(event,self.top.bind(event,self._wheel,add='+')) for event in ('<Button-4>','<Button-5>')]
         self.bind("<Destroy>", self._destroyed)
 
     def _wheel(self, event):
         if self.winfo_viewable() and str(event.widget).startswith(str(self)):
             if self.canvas.bbox("all") and self.canvas.bbox("all")[3] > self.canvas.winfo_height():
-                self.canvas.yview_scroll(-int(event.delta/120), "units")
+                amount = -1 if getattr(event,'num',None) == 4 else (1 if getattr(event,'num',None) == 5 else
+                         -int(event.delta) if sys.platform == 'darwin' else -int(event.delta/120))
+                self.canvas.yview_scroll(amount, "units")
                 return "break"
 
     def _destroyed(self, event):
         if event.widget is self and self.wheel_binding:
             self.top.unbind("<MouseWheel>", self.wheel_binding)
             self.wheel_binding = None
+            for event, token in self.linux_bindings:
+                self.top.unbind(event,token)
+            self.linux_bindings = []

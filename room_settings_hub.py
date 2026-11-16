@@ -1,6 +1,8 @@
 """Settings with scrollable pages and a persistent bottom-right action bar."""
 import tkinter as tk
 import os
+import platform
+import sqlite3
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
@@ -12,6 +14,8 @@ from room_version import VERSION
 from room_preferences import DEFAULTS, import_wallpaper
 from room_settings import ConnectionWindow
 from room_style import SURFACE, BACKGROUND, INK, MUTED, LINE, ACCENT
+from room_platform import open_directory
+from room_personality_ui import PersonalityPanel
 
 
 class SettingsWindow:
@@ -58,7 +62,7 @@ class SettingsWindow:
         body.pack(side="left", fill="both", expand=True)
         self.pages, self.navigation, self.scrollers = {}, {}, {}
         for key, title in (("general", "通用"), ("connections", "连接设置"), ("appearance", "界面外观"),
-                           ("chat","聊天与输入"), ("storage","数据与存储"), ("about","关于")):
+                           ("personality","AI 性格"), ("chat","聊天与输入"), ("storage","数据与存储"), ("about","关于")):
             button = ttk.Button(sidebar, text=tr(title), command=lambda k=key: self.select(k))
             button.pack(fill="x", pady=5)
             self.navigation[key] = button
@@ -69,6 +73,7 @@ class SettingsWindow:
             self.connection.restore_draft(connection_draft)
         self.build_appearance(self.pages["appearance"])
         self.build_chat(self.pages["chat"])
+        self.personality = PersonalityPanel(self.pages['personality'],self.room,self._changed)
         self.build_storage(self.pages["storage"])
         self.build_about(self.pages["about"])
         self.separator = ttk.Separator(self.window, orient="horizontal")
@@ -127,7 +132,10 @@ class SettingsWindow:
                 "wallpaper_fit":{"填充":"cover", "适应":"contain", "平铺":"tile"}[self.wallpaper_fit.get()]}
 
     def _changed(self, *_):
+        if not hasattr(self, 'apply_button') or not self.apply_button.winfo_exists():
+            return
         dirty = self._values() != self.room.preferences or self.room_nickname.get()!=room_nickname(self.room.store,self.room.current_room.id)
+        dirty = dirty or self.personality.dirty
         self.apply_button.configure(state="normal" if dirty else "disabled")
         self.cancel_button.configure(text=tr("取消") if dirty else tr("关闭"))
         note = "连接请使用页面内的保存按钮。套用会保留未保存的连接表单。" if self.page == "connections" else ("有尚未套用的更改" if dirty else "设置已保存")
@@ -243,20 +251,20 @@ class SettingsWindow:
         row=ttk.Frame(panel); row.pack(fill="x",pady=12)
         ttk.Button(row,text=tr("打开数据目录"),command=self.open_data_dir).pack(side="left")
         ttk.Button(row,text=tr("复制路径"),command=lambda:self.connection.copy(str(data_dir()))).pack(side="left",padx=8)
-        self.note(panel,"数据库、头像和背景图片都保存在该目录。密钥仍由 Windows 当前用户加密保护。",pady=(6,20))
+        self.note(panel,"Windows 使用 DPAPI；Linux/macOS 使用加密文件与仅当前用户可访问的本机密钥。备份时请保护整个数据目录。",pady=(6,20))
         ttk.Separator(panel).pack(fill="x",pady=(0,20))
         ttk.Button(panel,text=tr("导出当前群聊记录"),command=lambda:self.room.download_history(parent=self.window)).pack(anchor="w")
         self.note(panel,"导出 Markdown、文本或 JSON；不包含密钥和头像图片文件。",pady=(9,0))
 
     def open_data_dir(self):
         try:
-            os.startfile(str(data_dir()))
+            open_directory(data_dir())
         except OSError as error:
             messagebox.showerror(tr("数据目录"),str(error),parent=self.window)
 
     def build_about(self,outer):
         panel=self.panel(outer,"about")
-        self.heading(panel,"关于","Model Room · Windows v"+VERSION)
+        self.heading(panel,"关于","Model Room · "+platform.system()+" v"+VERSION)
         self.note(panel,"面向人类与多个 AI 成员的本地群聊。支持简体中文、繁体中文、英语、日语和韩语。",pady=(0,16))
         self.note(panel,"源码与五语使用说明随发布包保留。模型调用由各服务商独立处理与计费。")
 
@@ -368,6 +376,11 @@ class SettingsWindow:
             return False
         self.nickname.set(options["nickname"])
         self.room_nickname.set(nickname)
+        try:
+            self.personality.commit()
+        except (ValueError, sqlite3.Error) as error:
+            messagebox.showerror(tr('AI 性格'),tr(str(error)),parent=self.window)
+            return False
         if options != self.room.preferences or nickname!=room_nickname(self.room.store,self.room.current_room.id):
             draft = self.connection.capture_draft()
             positions = {key: scroll.canvas.yview()[0] for key, scroll in self.scrollers.items()}
@@ -385,4 +398,6 @@ class SettingsWindow:
                     self.scrollers[key].canvas.yview_moveto(position)
         if close:
             self.dismiss()
+        else:
+            self._changed()
         return True

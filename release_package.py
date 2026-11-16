@@ -12,15 +12,15 @@ from room_version import VERSION
 
 def public_files(source):
     root_names = {"LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "CONTRIBUTING.md", "RELEASE_NOTES.md",
-                  ".gitignore", ".gitattributes", "ModelRoom.ico", "translations.json", "lan_room.html", "requirements.txt"}
+                  ".gitignore", ".gitattributes", "ModelRoom.ico", "translations.json", "lan_room.html", "requirements.txt", "requirements-build.txt"}
     for path in sorted(source.iterdir()):
-        if path.is_file() and (path.name in root_names or path.suffix in {".py", ".ps1", ".cs"} or path.name.startswith("README")):
+        if path.is_file() and (path.name in root_names or path.suffix in {".py", ".ps1", ".cs"} or path.name.startswith(("README", "PERSONALITIES"))):
             yield path
-    for name in (".github", "licenses", "examples", "tests"):
+    for name in (".github", "licenses", "examples", "tests", "packaging"):
         for path in sorted((source/name).rglob("*")):
             if not path.is_file() or "__pycache__" in path.parts:
                 continue
-            if name == "licenses" or (name == "tests" and path.suffix in {".py", ".mjs"}) or (name == "examples" and path.suffix == ".json") or (name == ".github" and path.suffix in {".yml", ".yaml", ".md"}):
+            if name == "licenses" or (name == "tests" and path.suffix in {".py", ".mjs"}) or (name in {"examples","packaging"} and path.suffix in {".json", ".md"}) or (name == ".github" and path.suffix in {".yml", ".yaml", ".md"}):
                 yield path
 
 

@@ -24,6 +24,7 @@ class Member:
     name: str
     provider_id: str = ""
     model: str = ""
+    personality: str = ""
 
 
 CODEX_MEMBER = Member(CODEX, CODEX)
@@ -172,6 +173,8 @@ def round_input(topic, history, target, share, evidence, round_number, discussio
 
 def run_rounds(topic, targets, history, share, evidence, discussion, control, call, emit):
     """Return only after every dispatched request has been accounted for."""
+    if not targets:
+        return "讨论提前结束" if discussion else "就绪"
     previous = []
     active = tuple(targets)
 

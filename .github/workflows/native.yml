@@ -1,0 +1,142 @@
+name: Native standalone builds
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - run: python -m pip install -r requirements.txt
+      - name: Offline regression checks
+        run: |
+          python tests/check_v11.py
+          python tests/check_personality_ui.py
+          python tests/check_connections.py
+          python tests/check_exports.py
+          python tests/check_profile_wallpaper.py
+          python tests/check_settings_layout.py
+      - name: Build Windows EXE
+        shell: powershell
+        run: .\build-windows.ps1
+      - name: Test bundled runtime without installed Python
+        shell: powershell
+        run: |
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $env:PYTHONHOME = 'C:\modelroom-missing-python'
+          $env:PYTHONPATH = 'C:\modelroom-missing-modules'
+          $env:MODELROOM_REQUIRE_BUNDLED = '1'
+          $report = Join-Path $PWD 'selftest-windows.json'
+          $app = Start-Process -FilePath (Join-Path $PWD 'dist\ModelRoom.exe') -ArgumentList @('--self-test', ('"' + $report + '"')) -WindowStyle Hidden -PassThru
+          $null = $app.Handle
+          if (-not $app.WaitForExit(120000)) { $app.Kill(); throw 'EXE diagnostic timed out.' }
+          if ($app.ExitCode -ne 0) { throw 'EXE diagnostic failed.' }
+          $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if (-not $result.ok -or $result.version -ne '1.1') { throw 'EXE diagnostic report failed.' }
+          $result | ConvertTo-Json -Depth 5
+      - name: Package audited source and Windows downloads
+        run: python release_package.py --exe dist/ModelRoom.exe --output release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: release/*
+          if-no-files-found: error
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Install native GUI and packaging requirements
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth tk8.6 libxss1 libxft2 squashfs-tools desktop-file-utils
+          python -m pip install -r requirements-build.txt
+      - name: Offline regression checks
+        run: |
+          python tests/check_v11.py
+          xvfb-run -a python tests/check_personality_ui.py
+          xvfb-run -a python tests/check_exports.py
+          xvfb-run -a python tests/check_profile_wallpaper.py
+          xvfb-run -a python tests/check_settings_layout.py
+      - name: Build AppImage and DEB
+        run: python build_unix.py linux
+      - name: Test actual AppImage without Python
+        run: |
+          chmod +x release/*.AppImage
+          xvfb-run -a env APPIMAGE_EXTRACT_AND_RUN=1 MODELROOM_REQUIRE_BUNDLED=1 PATH=/usr/bin:/bin PYTHONHOME=/missing-python PYTHONPATH=/missing-modules ./release/ModelRoom-v1.1-Linux-x86_64.AppImage --self-test "$PWD/selftest-appimage.json"
+          python -c "import json; assert json.load(open('selftest-appimage.json'))['ok']"
+      - name: Install and test actual DEB
+        run: |
+          sudo apt-get install -y "$PWD/release/model-room_1.1_amd64.deb"
+          xvfb-run -a env MODELROOM_REQUIRE_BUNDLED=1 PATH=/usr/bin:/bin PYTHONHOME=/missing-python PYTHONPATH=/missing-modules modelroom --self-test "$PWD/selftest-deb.json"
+          python -c "import json; assert json.load(open('selftest-deb.json'))['ok']"
+      - name: Test DEB and AppImage in Kali Rolling
+        run: |
+          docker run --rm -v "$PWD/release:/release:ro" kalilinux/kali-rolling bash -ec '
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth /release/model-room_1.1_amd64.deb
+            useradd --create-home tester
+            su - tester -c "xvfb-run -a env MODELROOM_REQUIRE_BUNDLED=1 PYTHONHOME=/missing-python PYTHONPATH=/missing-modules modelroom --self-test /tmp/kali-deb.json"
+            su - tester -c "xvfb-run -a env APPIMAGE_EXTRACT_AND_RUN=1 MODELROOM_REQUIRE_BUNDLED=1 PYTHONHOME=/missing-python PYTHONPATH=/missing-modules /release/ModelRoom-v1.1-Linux-x86_64.AppImage --self-test /tmp/kali-appimage.json"
+            grep -q '\''"ok": true'\'' /tmp/kali-deb.json
+            grep -q '\''"ok": true'\'' /tmp/kali-appimage.json
+            cat /tmp/kali-deb.json /tmp/kali-appimage.json
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: release/*
+          if-no-files-found: error
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r requirements-build.txt
+      - name: Offline regression checks
+        run: |
+          python tests/check_v11.py
+          python tests/check_personality_ui.py
+          python tests/check_exports.py
+          python tests/check_profile_wallpaper.py
+          python tests/check_settings_layout.py
+      - name: Build native app, ZIP and DMG
+        run: python build_unix.py macos
+      - name: Test distributed macOS app without Python
+        run: |
+          mkdir appcheck
+          ditto -x -k "release/ModelRoom-v1.1-macOS-${{ matrix.arch }}.zip" appcheck
+          codesign --verify --deep --strict appcheck/ModelRoom.app
+          env MODELROOM_REQUIRE_BUNDLED=1 PATH=/usr/bin:/bin PYTHONHOME=/missing-python PYTHONPATH=/missing-modules appcheck/ModelRoom.app/Contents/MacOS/ModelRoom --self-test "$PWD/selftest-macos.json"
+          python -c "import json; assert json.load(open('selftest-macos.json'))['ok']"
+          hdiutil verify "release/ModelRoom-v1.1-macOS-${{ matrix.arch }}.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: release/*
+          if-no-files-found: error

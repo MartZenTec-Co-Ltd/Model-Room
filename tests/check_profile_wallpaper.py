@@ -50,7 +50,7 @@ with TemporaryDirectory(dir=WORK) as directory:
         assert image.getpixel((350,160))!=(255,255,255)
 
     app.open_settings(); settings=app.settings_window
-    assert list(settings.pages)==['general','connections','appearance','chat','storage','about']
+    assert list(settings.pages)==['general','connections','appearance','personality','chat','storage','about']
     settings.nickname.set('Alice')
     settings.room_nickname.set('本群 Alice')
     settings.options['avatar']=profile
@@ -148,4 +148,4 @@ with TemporaryDirectory(dir=WORK) as directory:
     assert room_nickname(reopened,first.id)=='Room changed'
     assert room_nickname(reopened,other.id)==''
     reopened.close()
-print('PASS: full wallpaper viewport with visible messages and scroll/resize; 3 fit modes; safe avatars; global and per-room nickname snapshots; context/export/LAN names; input settings; six pages × five languages; cancellation and restart persistence; no callback errors.')
+print('PASS: full wallpaper viewport with visible messages and scroll/resize; 3 fit modes; safe avatars; global and per-room nickname snapshots; context/export/LAN names; input settings; seven pages × five languages; cancellation and restart persistence; no callback errors.')

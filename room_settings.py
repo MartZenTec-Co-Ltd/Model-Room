@@ -1,10 +1,13 @@
-"""The Windows connection manager."""
+"""Cross-platform connection manager."""
 
 import queue
 import secrets
 import sqlite3
 import threading
 import tkinter as tk
+import os
+import sys
+import shlex
 import webbrowser
 from dataclasses import replace
 from tkinter import filedialog, messagebox, ttk
@@ -99,9 +102,15 @@ class ConnectionWindow:
         top = self.window.winfo_toplevel()
         def wheel(event):
             if str(event.widget).startswith(str(self.window)) and self.canvas.winfo_viewable():
-                self.canvas.yview_scroll(-int(event.delta / 120), "units")
-        binding = top.bind("<MouseWheel>", wheel, add="+")
-        self.window.bind("<Destroy>", lambda event: top.unbind("<MouseWheel>", binding) if event.widget is self.window else None)
+                amount = -1 if getattr(event,'num',None) == 4 else (1 if getattr(event,'num',None) == 5 else
+                         -int(event.delta) if sys.platform == 'darwin' else -int(event.delta/120))
+                self.canvas.yview_scroll(amount, "units")
+        bindings = [(event,top.bind(event,wheel,add='+')) for event in ('<MouseWheel>','<Button-4>','<Button-5>')]
+        def cleanup(event):
+            if event.widget is self.window:
+                for sequence, token in bindings:
+                    top.unbind(sequence,token)
+        self.window.bind('<Destroy>',cleanup)
         tabs = self.tabs = ttk.Notebook(container)
         tabs.pack(fill="both", expand=True)
         providers = ttk.Frame(tabs, padding=12)
@@ -491,7 +500,7 @@ class ConnectionWindow:
 
     def choose_cli(self):
         path = filedialog.askopenfilename(parent=self.window, title=tr("选择 Codex CLI"),
-                                          filetypes=[("Codex CLI", "codex.exe"), ("可执行文件", "*.exe")])
+                                          filetypes=[("Codex CLI", "codex.exe" if os.name == 'nt' else 'codex'), (tr("全部文件"), "*")])
         if path:
             self.cli.set(path)
             self.refresh_cli()
@@ -502,8 +511,8 @@ class ConnectionWindow:
 
     def copy_login(self):
         path = codex_path(self.cli.get())
-        self.copy("& '" + path.replace("'", "''") + "' login" if path else "codex login")
-        self.status("登录命令已复制。请在 PowerShell 执行。")
+        self.copy(("& '" + path.replace("'", "''") + "' login" if os.name == 'nt' else shlex.quote(path)+' login') if path else "codex login")
+        self.status("登录命令已复制。请在终端执行。")
 
     def save_cli(self):
         value = self.cli.get()

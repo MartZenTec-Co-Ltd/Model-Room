@@ -36,12 +36,14 @@ def write_runtime(target: Path) -> None:
                      "win_secrets.py", "room_style.py", "room_export.py", "room_presets.py", "room_claude.py",
                      "room_agents.py", "room_locale.py", "room_preferences.py", "room_settings_hub.py", "room_controls.py",
                      "room_identity.py", "room_wallpaper.py",
-                     "room_version.py", "room_selftest.py",
+                     "room_version.py", "room_selftest.py", "room_platform.py", "room_personality.py", "room_personality_ui.py",
                      "translations.json", "ModelRoom.ico"):
             bundle.write(source / name, "Lib/" + name)
         for path in (source / "licenses").rglob("*"):
             if path.is_file():
                 bundle.write(path, "licenses/" + path.relative_to(source / "licenses").as_posix())
+        for path in (source/'examples/personalities').glob('*.md'):
+            bundle.write(path,'Lib/examples/personalities/'+path.name)
         for name in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
             if (source / name).is_file():
                 bundle.write(source / name, name)
@@ -54,6 +56,11 @@ def write_runtime(target: Path) -> None:
             for path in metadata.rglob("*"):
                 if path.is_file():
                     bundle.write(path, "Lib/" + path.relative_to(pillow.parent).as_posix())
+        import certifi
+        certificates = Path(certifi.__file__).parent
+        for path in certificates.rglob('*'):
+            if path.is_file() and '__pycache__' not in path.parts:
+                bundle.write(path,'Lib/certifi/'+path.relative_to(certificates).as_posix())
 
 
 if __name__ == "__main__":

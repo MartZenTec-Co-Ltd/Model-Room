@@ -11,3 +11,10 @@ Bundled third-party software keeps its own copyright and license terms.
 The EXE embeds a complete application runtime and extracts it locally on first launch.
 End users do not need to install Python, Tkinter, Pillow or pip.
 Cloud model providers and optional local agents are external services/tools with their own terms and authentication.
+
+
+## v1.1 native packages
+
+Linux and macOS packages use [PyInstaller](https://pyinstaller.org/) (GPL with its bootloader exception), [cryptography](https://cryptography.io/) (Apache-2.0 / BSD-3-Clause), and [certifi](https://github.com/certifi/python-certifi) / Mozilla CA data (MPL-2.0). Package metadata/licenses and collected dependency notices accompany their runtime files. Cryptography's native wheel also contains OpenSSL, with its own notices.
+
+AppImage tooling: [appimagetool](https://github.com/AppImage/appimagetool) and [type2-runtime](https://github.com/AppImage/type2-runtime). Tool downloads are SHA256-pinned in packaging/appimage-tools.json; a changed upstream continuous build fails verification until the pins are reviewed.

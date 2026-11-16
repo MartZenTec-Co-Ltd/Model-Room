@@ -32,6 +32,7 @@ from room_preferences import load_preferences, save_preferences, wallpaper_photo
 from room_identity import room_nickname, avatar_path, avatar_photo, display_author, avatar_data_url
 from room_wallpaper import WallpaperTimeline
 from room_version import VERSION
+from room_platform import open_directory
 from room_style import (SURFACE, BACKGROUND, SIDEBAR, INK, MUTED, LINE, ACCENT, ACCENT_PALE,
                         GREEN, FONT, ActionButton, draw_icon, setup_theme, configure_palette)
 
@@ -699,10 +700,7 @@ class RoomWindow:
 
     def open_folder(self):
         try:
-            if os.name == "nt":
-                os.startfile(self.directory)
-            else:
-                subprocess.Popen(["xdg-open", self.directory])
+            open_directory(self.directory)
         except OSError:
             messagebox.showerror(tr("无法打开目录"), tr("目录可能已经移动，请重新选择。"), parent=self.root)
 
@@ -890,8 +888,10 @@ class RoomWindow:
                     if target.member.id == CODEX:
                         if temporary:
                             prompt = "这是通用群聊，没有指定项目目录。请直接讨论，不必读取本地文件。\n" + prompt
-                        return self.codex.ask(prompt, context, work_directory, edit, executable), {}
+                        return self.codex.ask(prompt, context, work_directory, edit, executable,
+                                              personality=target.member.personality), {}
                     response = ask_profile(target.profile, prompt, context, target.key,
+                                           personality=target.member.personality,
                                            claude_client=self.claude, harness_client=self.harness)
                     return response.body, response.details
 
@@ -972,4 +972,9 @@ def main():
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) == 3 and sys.argv[1] == '--self-test':
+        os.environ['MODELROOM_SELFTEST_REPORT'] = str(Path(sys.argv[2]).resolve())
+        from room_selftest import main as diagnostic_main
+        raise SystemExit(diagnostic_main())
     main()

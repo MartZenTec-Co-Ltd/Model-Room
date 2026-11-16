@@ -6,6 +6,7 @@ from room_style import MUTED
 from room_locale import tr, DisplayVar, EnumCombo
 from tkinter import ttk
 from uuid import uuid4
+from dataclasses import replace
 
 from room_core import CODEX, ReplyError
 from room_group import CODEX_MEMBER, MAX_MEMBERS, RESERVED, Member, save_members
@@ -146,12 +147,12 @@ class MembersWindow:
         index = selected[0]
         current = self.members[index]
         try:
-            updated = self.member_from_form(current.id)
+            updated = replace(self.member_from_form(current.id), personality=current.personality)
         except ReplyError as error:
             self.status.set(str(error))
             return
         if (current.provider_id, current.model) != (updated.provider_id, updated.model):
-            updated = Member(uuid4().hex, updated.name, updated.provider_id, updated.model)
+            updated = replace(updated, id=uuid4().hex)
         self.members[index] = updated
         self.refresh(index)
         self.status.set("选中的模型席位已更新。")

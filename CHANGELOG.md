@@ -1,3 +1,7 @@
+# v1.1
+
+Native Linux/macOS packages; Markdown AI personalities; three-member discussion and Unix regression coverage. See RELEASE_NOTES.md.
+
 # Changelog
 
 ## v1.0 — 2026-11-12

@@ -124,4 +124,4 @@ with TemporaryDirectory(dir=WORK) as directory:
     assert load_preferences(store)['accent']=='#23568a'
     assert not errors, errors
     app.close()
-print('PASS: all 5 languages × 2 themes × 2 sizes × 6 settings pages; right-aligned fixed footer; Boolean switches; Apply retains dialog and connection drafts; OK/Cancel; invalid input and save failure; no stale callbacks.')
+print('PASS: all 5 languages × 2 themes × 2 sizes × 7 settings pages; right-aligned fixed footer; Boolean switches; Apply retains dialog and connection drafts; OK/Cancel; invalid input and save failure; no stale callbacks.')

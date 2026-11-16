@@ -20,9 +20,9 @@ def run():
     # No application data, user transcripts, API keys or network calls are needed.
     for name in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "BRAVE_SEARCH_API_KEY"):
         os.environ.pop(name, None)
-    runtime = Path(sys.executable).resolve().parent
+    runtime = Path(getattr(sys,'_MEIPASS',Path(sys.executable).resolve().parent))
     import model_room
-    if not Path(model_room.__file__).resolve().is_relative_to(runtime):
+    if (getattr(sys,'frozen',False) or os.environ.get('MODELROOM_REQUIRE_BUNDLED')) and not Path(model_room.__file__).resolve().is_relative_to(runtime):
         raise RuntimeError("Application module was not loaded from the bundled runtime.")
     with tempfile.TemporaryDirectory(prefix="ModelRoom-selftest-") as directory:
         directory = Path(directory)
@@ -52,8 +52,17 @@ def run():
             app.open_settings()
             app.settings_window.window.attributes("-alpha", 0)
             root.update()
-            assert len(app.settings_window.pages)==6
+            assert len(app.settings_window.pages)==7
             assert app.settings_window.avatar_photo is not None
+            personality=app.settings_window.personality
+            personality.template.set('审阅伙伴')
+            personality.use_template()
+            assert app.settings_window.apply()
+            assert 'Constructive reviewer' in app.members[0].personality
+            from win_secrets import read_secret,write_secret
+            key_file=directory/'keys/selftest.key'
+            write_secret(key_file,'offline-selftest-fixture')
+            assert read_secret(key_file)=='offline-selftest-fixture'
             assert VERSION in root.title()
             assert not errors, "Tk callback failed"
         finally:
@@ -64,7 +73,8 @@ def run():
                 store.close()
     return {"ok":True, "version":VERSION, "executable":sys.executable,
             "checks":["bundled application modules", "Tcl/Tk GUI", "Pillow native image libraries",
-                      "full chat wallpaper", "avatar rendering", "six settings pages", "no model requests"]}
+                      "full chat wallpaper", "avatar rendering", "seven settings pages",
+                      "personality template and persistence", "encrypted credential roundtrip", "no model requests"]}
 
 
 def main():
